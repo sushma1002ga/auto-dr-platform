@@ -1,8 +1,34 @@
 import psycopg2
 import time
-import os
+import boto3
 
-recovery_in_progress = False
+cloudwatch = boto3.client("cloudwatch")
+
+def report_failure():
+
+    cloudwatch.put_metric_data(
+        Namespace="DRSystem",
+        MetricData=[
+            {
+                "MetricName": "DBHealth",
+                "Value": 0,
+                "Unit": "None"
+            }
+        ]
+    )
+
+def report_success():
+
+    cloudwatch.put_metric_data(
+        Namespace="DRSystem",
+        MetricData=[
+            {
+                "MetricName": "DBHealth",
+                "Value": 1,
+                "Unit": "None"
+            }
+        ]
+    )
 
 while True:
 
@@ -16,21 +42,14 @@ while True:
 
         conn.close()
 
-        print("✅ Database Healthy")
-        recovery_in_progress = False
+        print("✅ DB Healthy")
+
+        report_success()
 
     except Exception:
 
-        if not recovery_in_progress:
+        print("❌ DB Failed")
 
-            print("❌ Database Failure Detected")
-            print("🚨 Triggering Recovery Once")
+        report_failure()
 
-            recovery_in_progress = True
-
-            os.system("python scripts/restore.py")
-
-        else:
-            print("⏳ Recovery already in progress... waiting")
-
-    time.sleep(5)
+    time.sleep(10)
