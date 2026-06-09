@@ -1,13 +1,27 @@
+import boto3
 import os
 from datetime import datetime
 
-backup_name = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.sql"
+BUCKET_NAME = "auto-dr-backups-demo"
 
-command = (
-    f"docker exec dr-postgres "
-    f"pg_dump -U postgres demo > {backup_name}"
-)
+def create_backup():
 
-os.system(command)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"backup_{timestamp}.sql"
 
-print(f"Backup Created: {backup_name}")
+    print("📦 Creating DB dump...")
+
+    os.system(
+        f"docker exec dr-postgres pg_dump -U postgres demo > {filename}"
+    )
+
+    print("☁️ Uploading to S3...")
+
+    s3 = boto3.client("s3")
+
+    s3.upload_file(filename, BUCKET_NAME, filename)
+
+    print(f"✅ Backup uploaded: {filename}")
+
+if __name__ == "__main__":
+    create_backup()

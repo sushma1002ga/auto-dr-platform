@@ -1,43 +1,46 @@
-import glob
+import boto3
 import os
 
-container_name = "dr-postgres"
+BUCKET_NAME = "auto-dr-backups-demo"
 
-# Step 1: ensure container is running
-print("🔄 Starting database container...")
+def get_latest_backup():
 
-os.system(f"docker start {container_name}")
+    s3 = boto3.client("s3")
 
-# Step 2: wait for DB to be ready
-print("⏳ Waiting for DB to initialize...")
-os.system("sleep 5")
+    response = s3.list_objects_v2(Bucket=BUCKET_NAME)
 
-# Step 3: find latest backup
-files = sorted(glob.glob("backup_*.sql"))
+    objects = response.get("Contents", [])
 
-if not files:
-    print("❌ No backup found")
-    exit()
+    if not objects:
+        print("❌ No backups found in S3")
+        return None
 
-latest = files[-1]
+    latest = sorted(objects, key=lambda x: x["LastModified"])[-1]
 
-# Step 4: restore
-print(f"♻️ Restoring from {latest}")
+    return latest["Key"]
 
-os.system(
-    f"docker exec -i {container_name} "
-    f"psql -U postgres demo < {latest}"
-)
+def restore_backup():
 
-print("✅ Restore Complete")
+    latest_file = get_latest_backup()
 
-print("🔍 Verifying DB...")
+    if not latest_file:
+        return
 
-result = os.system(
-    "docker exec dr-postgres psql -U postgres -d demo -c 'SELECT 1;'"
-)
+    print(f"⬇️ Downloading {latest_file} from S3...")
 
-if result == 0:
-    print("🎉 Recovery SUCCESS")
-else:
-    print("❌ Recovery FAILED")
+    s3 = boto3.client("s3")
+
+    local_file = "/tmp/backup.sql"
+
+    s3.download_file(BUCKET_NAME, latest_file, local_file)
+
+    print("♻️ Restoring database...")
+
+    os.system(
+        f"docker exec -i dr-postgres psql -U postgres demo < {local_file}"
+    )
+
+    print("✅ Restore completed from S3 backup")
+
+if __name__ == "__main__":
+    restore_backup()
