@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+
+backup_*.sql
+
+.env
+
+.idea/
+.vscode/
